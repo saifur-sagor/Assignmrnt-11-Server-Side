@@ -29,6 +29,26 @@ async function run() {
     const database = client.db("book_courier");
     const booksCollection = database.collection("books");
 
+    // Get latest books
+    app.get("/books/latest", async (req, res) => {
+      const books = await booksCollection
+        .find()
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+      res.send(books);
+    });
+    // get all books
+    app.get("/books", async (req, res) => {
+      try {
+        const books = await booksCollection.find().toArray();
+        res.send(books);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ error: "Failed to fetch books" });
+      }
+    });
+
     // book post
     app.post("/books", async (req, res) => {
       const book = req.body;
