@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, Collection } = require("mongodb");
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -24,6 +24,19 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+
+    // All Collection
+    const database = client.db("book_courier");
+    const booksCollection = database.collection("books");
+
+    // book post
+    app.post("/books", async (req, res) => {
+      const book = req.body;
+      //created time
+      book.createdAt = new Date();
+      const result = await booksCollection.insertOne(book);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
