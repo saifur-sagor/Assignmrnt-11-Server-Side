@@ -78,7 +78,8 @@ async function run() {
     app.post("/orders", async (req, res) => {
       const order = req.body;
       order.createdAt = new Date();
-      order.status = "pending"; // future use
+      order.status = "pending";
+      order.paymentStatus = "unpaid";
       const result = await ordersCollection.insertOne(order);
       res.send(result);
     });
@@ -88,6 +89,52 @@ async function run() {
       const orderedBook = req.body;
       orderedBook.createdAt = new Date();
       const result = await orderedBooksCollection.insertOne(orderedBook);
+      res.send(result);
+    });
+    // get orders by user email
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) {
+        return res.send([]);
+      }
+
+      const orders = await ordersCollection
+        .find({ userEmail: email })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(orders);
+    });
+    // cancel order
+    app.patch("/orders/cancel/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await ordersCollection.updateOne(
+        { _id: new ObjectId(id), status: "pending" },
+        {
+          $set: {
+            status: "cancelled",
+          },
+        }
+      );
+
+      res.send(result);
+    });
+    // pay order
+    app.patch("/orders/pay/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await ordersCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status: "paid",
+            paymentStatus: "paid",
+          },
+        }
+      );
+
       res.send(result);
     });
 
