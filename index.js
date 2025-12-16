@@ -2,7 +2,12 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const { MongoClient, ServerApiVersion, Collection } = require("mongodb");
+const {
+  MongoClient,
+  ServerApiVersion,
+  Collection,
+  ObjectId,
+} = require("mongodb");
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -28,6 +33,8 @@ async function run() {
     // All Collection
     const database = client.db("book_courier");
     const booksCollection = database.collection("books");
+    const ordersCollection = database.collection("orders");
+    const orderedBooksCollection = database.collection("orderedBooks");
 
     // Get latest books
     app.get("/books/latest", async (req, res) => {
@@ -48,6 +55,15 @@ async function run() {
         res.status(500).send({ error: "Failed to fetch books" });
       }
     });
+    // Get single book by id
+    app.get("/books/:id", async (req, res) => {
+      const { id } = req.params;
+      const book = await booksCollection.findOne({ _id: new ObjectId(id) });
+      if (!book) {
+        return res.status(404).send({ error: "Book not found" });
+      }
+      res.send(book);
+    });
 
     // book post
     app.post("/books", async (req, res) => {
@@ -55,6 +71,23 @@ async function run() {
       //created time
       book.createdAt = new Date();
       const result = await booksCollection.insertOne(book);
+      res.send(result);
+    });
+
+    // place order
+    app.post("/orders", async (req, res) => {
+      const order = req.body;
+      order.createdAt = new Date();
+      order.status = "pending"; // future use
+      const result = await ordersCollection.insertOne(order);
+      res.send(result);
+    });
+
+    // ordered book info
+    app.post("/ordered-books", async (req, res) => {
+      const orderedBook = req.body;
+      orderedBook.createdAt = new Date();
+      const result = await orderedBooksCollection.insertOne(orderedBook);
       res.send(result);
     });
 
