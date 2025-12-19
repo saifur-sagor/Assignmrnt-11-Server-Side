@@ -73,6 +73,19 @@ async function run() {
       const result = await booksCollection.insertOne(book);
       res.send(result);
     });
+    // GET my books by email
+    app.get("/my-books", async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+
+      const query = { email: email };
+      const result = await booksCollection.find(query).toArray();
+
+      res.send(result);
+    });
 
     // place order
     app.post("/orders", async (req, res) => {
@@ -91,7 +104,7 @@ async function run() {
       const result = await orderedBooksCollection.insertOne(orderedBook);
       res.send(result);
     });
-    // get orders by user email
+    // get my orders by user email
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
 
