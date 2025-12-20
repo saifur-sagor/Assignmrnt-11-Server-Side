@@ -2,13 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 require("dotenv").config();
-const {
-  MongoClient,
-  ServerApiVersion,
-  Collection,
-  ObjectId,
-} = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
+// stipe
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 // middleware
 app.use(express.json());
@@ -73,7 +70,7 @@ async function run() {
       const result = await booksCollection.insertOne(book);
       res.send(result);
     });
-    // GET my books by email
+    // Get my books by email
     app.get("/my-books", async (req, res) => {
       const email = req.query.email;
 
@@ -83,6 +80,29 @@ async function run() {
 
       const query = { email: email };
       const result = await booksCollection.find(query).toArray();
+
+      res.send(result);
+    });
+    // update book (PATCH)
+    app.patch("/books/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedBook = req.body;
+
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: {
+          name: updatedBook.name,
+          author: updatedBook.author,
+          image: updatedBook.image,
+          status: updatedBook.status,
+          price: updatedBook.price,
+          description: updatedBook.description,
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await booksCollection.updateOne(filter, updateDoc);
 
       res.send(result);
     });
@@ -134,21 +154,70 @@ async function run() {
 
       res.send(result);
     });
-    // pay order
-    app.patch("/orders/pay/:id", async (req, res) => {
-      const id = req.params.id;
 
-      const result = await ordersCollection.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: {
-            status: "paid",
-            paymentStatus: "paid",
+    // payment related api
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.bookPrice) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "BDT",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo.bookName,
+              },
+            },
+            quantity: 1,
           },
-        }
-      );
+        ],
+        customer_email: paymentInfo.userEmail,
+        mode: "payment",
+        metadata: {
+          bookId: paymentInfo.bookId,
+        },
+        success_url: `${process.env.SITE_DOMAIN}/dashBoard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashBoard/payment-cancelled`,
+      });
+      res.send({ url: session.url });
+    });
+    // PATCH
+    app.patch("/orders/paid/:id", async (req, res) => {
+      const { id } = req.params;
+      const { transactionId } = req.body;
 
-      res.send(result);
+      try {
+        const paidAt = new Date(); // Payment সময়
+        const result = await ordersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status: "paid", transactionId, paidAt } }
+        );
+
+        res.send({
+          success: true,
+          message: "Order updated to paid",
+          transactionId,
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, message: error.message });
+      }
+    });
+    // stripe session
+    app.get("/stripe-session/:id", async (req, res) => {
+      const sessionId = req.params.id;
+
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const orderId = session.metadata.bookId;
+      // transactionId
+      const transactionId = session.payment_intent;
+      // status update
+      await ordersCollection.updateOne(
+        { _id: new ObjectId(orderId) },
+        { $set: { status: "paid", transactionId, paidAt: new Date() } }
+      );
+      res.send({ orderId, transactionId });
+      res.status(500).send({ error: error.message });
     });
 
     // Send a ping to confirm a successful connection
