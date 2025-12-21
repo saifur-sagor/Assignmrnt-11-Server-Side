@@ -6,7 +6,38 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 // stipe
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+// firebase admin key
 
+// const admin = require("firebase-admin");
+
+// const serviceAccount = require("path/to/serviceAccountKey.json");
+// decode
+// const serviceAccount = require("./firebase-admin-key.json");
+
+// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+// const serviceAccount = JSON.parse(decoded);
+
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount),
+// });
+
+// verifyFBToken MiddleWare
+const verifyFBToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+  // console.log("headers", token);
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+  try {
+    const tokenId = token.split(" ")[1];
+    const decoded = await admin.auth().verifyIdToken(tokenId);
+    console.log("decoded in the token", decoded);
+    req.decoded_email = decoded.email;
+    next();
+  } catch (error) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+};
 // middleware
 app.use(express.json());
 app.use(cors());
@@ -71,7 +102,7 @@ async function run() {
       res.send(result);
     });
     // Get my books by email
-    app.get("/my-books", async (req, res) => {
+    app.get("/my-books", verifyFBToken, async (req, res) => {
       const email = req.query.email;
 
       if (!email) {
@@ -84,7 +115,7 @@ async function run() {
       res.send(result);
     });
     // update book (PATCH)
-    app.patch("/books/:id", async (req, res) => {
+    app.patch("/books/:id", verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const updatedBook = req.body;
 
@@ -127,18 +158,24 @@ async function run() {
     // get my orders by user email
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
+      const status = req.query.status;
 
       if (!email) {
         return res.send([]);
       }
+      const query = { userEmail: email };
+      if (status) {
+        query.status = status;
+      }
 
       const orders = await ordersCollection
-        .find({ userEmail: email })
+        .find(query)
         .sort({ createdAt: -1 })
         .toArray();
 
       res.send(orders);
     });
+
     // cancel order
     app.patch("/orders/cancel/:id", async (req, res) => {
       const id = req.params.id;
@@ -153,6 +190,35 @@ async function run() {
       );
 
       res.send(result);
+    });
+    // librarian-orders
+    app.get("/librarian-orders", async (req, res) => {
+      const ownerEmail = req.query.email;
+
+      if (!ownerEmail) {
+        return res.status(400).send({ error: "Owner email required" });
+      }
+      const orders = await orderedBooksCollection
+        .find({ ownerEmail })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(orders);
+    });
+    // PATCH librarian-orders/cancel/:id
+    app.patch("/librarian-orders/cancel/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await ordersCollection.updateOne(
+        { _id: new ObjectId(id), status: "pending" },
+        { $set: { status: "cancelled" } }
+      );
+
+      if (result.modifiedCount === 0) {
+        return res
+          .status(400)
+          .send({ success: false, message: "Cannot cancel this order" });
+      }
+      res.send({ success: true, message: "Order cancelled successfully" });
     });
 
     // payment related api
