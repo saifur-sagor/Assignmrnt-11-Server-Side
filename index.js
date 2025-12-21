@@ -6,36 +6,35 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 // stipe
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+
 // firebase admin key
+const admin = require("firebase-admin");
+// const serviceAccount = require("./book_courier.json");
+// decode;
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 
-// const admin = require("firebase-admin");
-
-// const serviceAccount = require("path/to/serviceAccountKey.json");
-// decode
-// const serviceAccount = require("./firebase-admin-key.json");
-
-// const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
-// const serviceAccount = JSON.parse(decoded);
-
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount),
-// });
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 // verifyFBToken MiddleWare
 const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
   // console.log("headers", token);
   if (!token) {
-    return res.status(401).send({ message: "Unauthorized access" });
+    return res.status(401).send({ message: "Unauthorized access1" });
   }
   try {
     const tokenId = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(tokenId);
-    console.log("decoded in the token", decoded);
+    // console.log("decoded in the token", decoded);
     req.decoded_email = decoded.email;
     next();
   } catch (error) {
-    return res.status(401).send({ message: "unauthorized access" });
+    return res.status(401).send({ message: "unauthorized access2" });
   }
 };
 // middleware
@@ -56,14 +55,61 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     // All Collection
     const database = client.db("book_courier");
+    const usersCollection = database.collection("users");
     const booksCollection = database.collection("books");
     const ordersCollection = database.collection("orders");
     const orderedBooksCollection = database.collection("orderedBooks");
 
+    // user get
+    app.get("/users", async (req, res) => {
+      const searchText = req.query.searchText;
+      const query = {};
+      if (searchText) {
+        // query.displayName = searchText;
+        // query.displayName = { $regex: searchText, $options: "i" };
+        query.$or = [
+          { displayName: { $regex: searchText, $options: "i" } },
+          { email: { $regex: searchText, $options: "i" } },
+        ];
+      }
+      const cursor = usersCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .limit(5);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+    // user create
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+
+      const email = user.email;
+      const userExists = await usersCollection.findOne({ email });
+      if (userExists) {
+        return res.send({ message: "already user exists" });
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+    // user role update
+    app.patch("/users/:id/role", async (req, res) => {
+      const id = req.params.id;
+      const roleInfo = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          role: roleInfo.role,
+        },
+      };
+      const result = await usersCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
     // Get latest books
     app.get("/books/latest", async (req, res) => {
       const books = await booksCollection
@@ -283,14 +329,14 @@ async function run() {
         { $set: { status: "paid", transactionId, paidAt: new Date() } }
       );
       res.send({ orderId, transactionId });
-      res.status(500).send({ error: error.message });
+      res.status(500).send({ error: "error" });
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
