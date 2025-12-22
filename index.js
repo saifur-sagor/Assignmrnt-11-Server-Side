@@ -97,6 +97,13 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
+    // admin get
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      res.send({ role: user?.role || "user" });
+    });
     // user role update
     app.patch("/users/:id/role", async (req, res) => {
       const id = req.params.id;
@@ -122,10 +129,29 @@ async function run() {
     // get all books
     app.get("/books", async (req, res) => {
       try {
-        const books = await booksCollection.find().toArray();
+        const searchText = req.query.search || "";
+        const sortOrder = req.query.sort;
+
+        const query = {
+          name: { $regex: searchText, $options: "i" },
+        };
+
+        const sortOption = {};
+        if (sortOrder === "low") {
+          sortOption = { price: 1 };
+        } else if (sortOrder === "high") {
+          sortOption = { price: -1 };
+        } else {
+          sortOption = { createdAt: -1 };
+        }
+        const books = await booksCollection
+          .find(query)
+          .sort(sortOption)
+          .toArray();
+
         res.send(books);
       } catch (error) {
-        console.error(error);
+        console.error("Sort Error:", error);
         res.status(500).send({ error: "Failed to fetch books" });
       }
     });
