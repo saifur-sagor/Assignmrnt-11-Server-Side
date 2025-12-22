@@ -119,8 +119,12 @@ async function run() {
     });
     // Get latest books
     app.get("/books/latest", async (req, res) => {
+      const query = {
+        status: "available",
+      };
+
       const books = await booksCollection
-        .find()
+        .find(query)
         .sort({ createdAt: -1 })
         .limit(6)
         .toArray();
@@ -128,32 +132,29 @@ async function run() {
     });
     // get all books
     app.get("/books", async (req, res) => {
-      try {
-        const searchText = req.query.search || "";
-        const sortOrder = req.query.sort;
+      const searchText = req.query.search || "";
+      const sortOrder = req.query.sort;
 
-        const query = {
-          name: { $regex: searchText, $options: "i" },
-        };
+      const query = {
+        name: { $regex: searchText, $options: "i" },
 
-        const sortOption = {};
-        if (sortOrder === "low") {
-          sortOption = { price: 1 };
-        } else if (sortOrder === "high") {
-          sortOption = { price: -1 };
-        } else {
-          sortOption = { createdAt: -1 };
-        }
-        const books = await booksCollection
-          .find(query)
-          .sort(sortOption)
-          .toArray();
+        status: "available",
+      };
 
-        res.send(books);
-      } catch (error) {
-        console.error("Sort Error:", error);
-        res.status(500).send({ error: "Failed to fetch books" });
+      let sortOption = {};
+      if (sortOrder === "low") {
+        sortOption = { price: 1 };
+      } else if (sortOrder === "high") {
+        sortOption = { price: -1 };
+      } else {
+        sortOption = { createdAt: -1 };
       }
+      const books = await booksCollection
+        .find(query)
+        .sort(sortOption)
+        .toArray();
+
+      res.send(books);
     });
     // Get single book by id
     app.get("/books/:id", async (req, res) => {
@@ -291,6 +292,41 @@ async function run() {
           .send({ success: false, message: "Cannot cancel this order" });
       }
       res.send({ success: true, message: "Order cancelled successfully" });
+    });
+    // admin - get all books
+    app.get("/admin/books", async (req, res) => {
+      const books = await booksCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+      res.send(books);
+    });
+    // admin - update book status
+    app.patch("/admin/books/status/:id", async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+
+      const result = await booksCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status,
+            updatedAt: new Date(),
+          },
+        }
+      );
+
+      res.send(result);
+    });
+    // admin - delete book
+    app.delete("/admin/books/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await booksCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
     });
 
     // payment related api
