@@ -63,6 +63,7 @@ async function run() {
     const booksCollection = database.collection("books");
     const ordersCollection = database.collection("orders");
     const orderedBooksCollection = database.collection("orderedBooks");
+    const wishListCollection = database.collection("wishList");
 
     // user get
     app.get("/users", async (req, res) => {
@@ -228,6 +229,33 @@ async function run() {
       const result = await orderedBooksCollection.insertOne(orderedBook);
       res.send(result);
     });
+    // wished book info
+    app.post("/wish-books", async (req, res) => {
+      const wishedBook = req.body;
+      wishedBook.createdAt = new Date();
+      const result = await wishListCollection.insertOne(wishedBook);
+      res.send(result);
+    });
+    // get wish list
+    app.get("/wish-books", async (req, res) => {
+      const email = req.query.email;
+      const status = req.query.status;
+
+      if (!email) {
+        return res.send([]);
+      }
+      const query = { userEmail: email };
+      if (status) {
+        query.status = status;
+      }
+
+      const orders = await ordersCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.send(orders);
+    });
     // get my orders by user email
     app.get("/orders", async (req, res) => {
       const email = req.query.email;
@@ -328,6 +356,23 @@ async function run() {
 
       res.send(result);
     });
+    // total users
+    app.get("/stats/users", async (req, res) => {
+      const count = await usersCollection.countDocuments({});
+      res.send({ count });
+    });
+
+    // total librarians
+    app.get("/stats/librarians", async (req, res) => {
+      const count = await usersCollection.countDocuments({ role: "Librarian" });
+      res.send({ count });
+    });
+
+    // total books
+    app.get("/stats/books", async (req, res) => {
+      const count = await booksCollection.countDocuments({});
+      res.send({ count });
+    });
 
     // payment related api
     app.post("/create-checkout-session", async (req, res) => {
@@ -362,7 +407,7 @@ async function run() {
       const { transactionId } = req.body;
 
       try {
-        const paidAt = new Date(); // Payment সময়
+        const paidAt = new Date();
         const result = await ordersCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: { status: "paid", transactionId, paidAt } }
