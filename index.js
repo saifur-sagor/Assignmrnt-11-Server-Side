@@ -249,12 +249,12 @@ async function run() {
         query.status = status;
       }
 
-      const orders = await ordersCollection
+      const wishList = await wishListCollection
         .find(query)
         .sort({ createdAt: -1 })
         .toArray();
 
-      res.send(orders);
+      res.send(wishList);
     });
     // get my orders by user email
     app.get("/orders", async (req, res) => {
