@@ -64,6 +64,7 @@ async function run() {
     const ordersCollection = database.collection("orders");
     const orderedBooksCollection = database.collection("orderedBooks");
     const wishListCollection = database.collection("wishList");
+    const postsCollection = database.collection("posts");
 
     // user get
     app.get("/users", async (req, res) => {
@@ -77,10 +78,7 @@ async function run() {
           { email: { $regex: searchText, $options: "i" } },
         ];
       }
-      const cursor = usersCollection
-        .find(query)
-        .sort({ createdAt: -1 })
-        .limit(5);
+      const cursor = usersCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -157,6 +155,22 @@ async function run() {
 
       res.send(books);
     });
+
+    // comment post
+    app.post("/posts", async (req, res) => {
+      const post = req.body;
+      const result = await postsCollection.insertOne(post);
+      res.send(result);
+    });
+    // comment get
+    app.get("/posts", async (req, res) => {
+      const result = await postsCollection
+        .find()
+        .sort({ createdAt: -1 })
+        .toArray();
+      res.send(result);
+    });
+
     // Get single book by id
     app.get("/books/:id", async (req, res) => {
       const { id } = req.params;
